@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>المحسن ستور - إتمام الطلب</title>
+<style>*{box-sizing:border-box;font-family:Arial}body{margin:0;background:#a00303}.wrap{max-width:1000px;margin:auto;padding:18px}.panel,.card{background:#fff;border-radius:15px;padding:20px;margin-bottom:16px;box-shadow:0 2px 10px #0002}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}input,textarea,select{width:100%;padding:11px;border:1px solid #ddd;border-radius:8px;margin-top:6px}button{background:#960505;color:#fff;border:0;padding:11px 18px;border-radius:8px;cursor:pointer;margin-top:10px}.total{font-size:21px;font-weight:bold}@media(max-width:650px){.grid{grid-template-columns:1fr}}</style></head>
+<body><div class="wrap"><div class="panel"><h1>إتمام الطلب</h1><p id="user"></p></div>
+<div class="grid"><div class="panel"><h2>بيانات الشحن</h2>
+<label>الاسم<input id="name"></label><label>الهاتف<input id="phone"></label><label>المدينة<input id="city"></label><label>العنوان<textarea id="address"></textarea></label>
+<label>طريقة الشحن<select id="shipping"><option value="0">استلام/شحن مجاني</option><option value="50">شحن عادي - 50 ج.م</option></select></label>
+</div><div class="panel"><h2>ملخص الطلب</h2><div id="items"></div><p id="total" class="total"></p><h3>طريقة الدفع</h3>
+<label><input type="radio" name="pay" value="cod" checked> الدفع عند الاستلام</label><br>
+<label><input type="radio" name="pay" value="online"> دفع إلكتروني (جاهز للربط ببوابة دفع)</label><br>
+<button onclick="placeOrder()">تأكيد الطلب</button><p id="msg"></p></div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script>
+<script>
+const db=supabase.createClient(STORE_CONFIG.SUPABASE_URL,STORE_CONFIG.SUPABASE_ANON_KEY);
+let cart=JSON.parse(localStorage.getItem('alMohsenStoreCart')||'[]');
+let user;
+async function init(){const r=await db.auth.getUser();user=r.data.user;if(!user){location.href='login.html';return}document.getElementById('user').textContent='الحساب: '+user.email;render()}
+function render(){items.innerHTML=cart.length?cart.map(x=>`<div>${x.name} × ${x.qty} — ${(x.price*x.qty).toLocaleString('ar-EG')} ج.م</div>`).join(''):'السلة فارغة';calc()}
+function calc(){const sub=cart.reduce((s,x)=>s+x.price*x.qty,0), ship=Number(shipping.value||0);total.textContent='الإجمالي: '+(sub+ship).toLocaleString('ar-EG')+' ج.م'}
+shipping.onchange=calc;
+async function placeOrder(){
+ if(!cart.length){msg.textContent='السلة فارغة';return}
+ const subtotal=cart.reduce((s,x)=>s+x.price*x.qty,0), ship=Number(shipping.value||0), method=document.querySelector('input[name=pay]:checked').value;
+ const shippingAddress={recipient_name:name.value,phone:phone.value,city:city.value,address_line:address.value};
+ const {data:order,error}=await db.from('orders').insert({user_id:user.id,status:'pending',payment_status:method==='cod'?'pending':'pending',payment_method:method,shipping_method:'standard',subtotal,shipping_cost:ship,total:subtotal+ship,customer_name:name.value,customer_phone:phone.value,shipping_address:shippingAddress}).select().single();
+ if(error){msg.textContent=error.message;return}
+ const rows=cart.map(x=>({order_id:order.id,product_name:x.name,product_id:x.id||null,unit_price:x.price,quantity:x.qty}));
+ const r=await db.from('order_items').insert(rows);
+ if(r.error){msg.textContent=r.error.message;return}
+ await db.from('shipments').insert({order_id:order.id,status:'pending',shipping_cost:ship});
+ if(method==='online'){msg.textContent='تم إنشاء الطلب. ربط بوابة الدفع الحقيقية يتم في الخطوة التالية.'}
+ else msg.textContent='تم إنشاء الطلب بنجاح. الدفع عند الاستلام.';
+ localStorage.removeItem('alMohsenStoreCart');cart=[];render()
+}
+init();
+</script></body></html>

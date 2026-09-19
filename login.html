@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>المحسن ستور - تسجيل الدخول</title>
+<style>*{box-sizing:border-box;font-family:Arial}body{margin:0;background:#a00303;min-height:100vh;display:grid;place-items:center}.box{width:min(420px,92%);background:#fff;border-radius:15px;padding:25px;box-shadow:0 5px 25px #0003}input{width:100%;padding:12px;margin:7px 0;border:1px solid #ddd;border-radius:8px}button{width:100%;background:#960505;color:#fff;border:0;padding:12px;border-radius:8px;margin-top:10px;cursor:pointer}.link{text-align:center;margin-top:14px}.msg{color:#960505;min-height:20px}</style></head>
+<body><div class="box"><h1>المحسن ستور</h1><h2>تسجيل الدخول</h2>
+<input id="email" type="email" placeholder="البريد الإلكتروني"><input id="password" type="password" placeholder="كلمة المرور">
+<button onclick="login()">دخول</button><div class="link">ليس لديك حساب؟ <a href="#" onclick="signup()">إنشاء حساب</a></div><p id="msg" class="msg"></p></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script>
+<script>
+const db=supabase.createClient(STORE_CONFIG.SUPABASE_URL,STORE_CONFIG.SUPABASE_ANON_KEY);
+async function login(){const {error}=await db.auth.signInWithPassword({email:email.value,password:password.value});if(error)msg.textContent=error.message;else location.href='checkout.html'}
+async function signup(){const name=prompt('الاسم');if(!name)return;const {data,error}=await db.auth.signUp({email:email.value,password:password.value,options:{data:{full_name:name}}});msg.textContent=error?error.message:'تم إنشاء الحساب، يمكنك تسجيل الدخول الآن.'}
+</script></body></html>
