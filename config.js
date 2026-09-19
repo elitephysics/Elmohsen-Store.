@@ -1,5 +1,5 @@
 window.STORE_CONFIG = {
-  SUPABASE_URL: "https://hkmlicxlzueogiqibbuj.supabase.co",
-  SUPABASE_ANON_KEY: "sb_publishable_JQUecUA5kUeRshsSzS-TKQ_uIq4De82",
+  SUPABASE_URL: "https://dtfbqcfqwlsyjxzqseew.supabase.co",
+  SUPABASE_ANON_KEY: "ضع_مفتاح_Supabase_Publishable_هنا",
   CURRENCY: "EGP"
 };

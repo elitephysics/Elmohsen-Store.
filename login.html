@@ -1,13 +1,43 @@
 <!doctype html>
-<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>المحسن ستور - تسجيل الدخول</title>
-<style>*{box-sizing:border-box;font-family:Arial}body{margin:0;background:#a00303;min-height:100vh;display:grid;place-items:center}.box{width:min(420px,92%);background:#fff;border-radius:15px;padding:25px;box-shadow:0 5px 25px #0003}input{width:100%;padding:12px;margin:7px 0;border:1px solid #ddd;border-radius:8px}button{width:100%;background:#960505;color:#fff;border:0;padding:12px;border-radius:8px;margin-top:10px;cursor:pointer}.link{text-align:center;margin-top:14px}.msg{color:#960505;min-height:20px}</style></head>
-<body><div class="box"><h1>المحسن ستور</h1><h2>تسجيل الدخول</h2>
-<input id="email" type="email" placeholder="البريد الإلكتروني"><input id="password" type="password" placeholder="كلمة المرور">
-<button onclick="login()">دخول</button><div class="link">ليس لديك حساب؟ <a href="#" onclick="signup()">إنشاء حساب</a></div><p id="msg" class="msg"></p></div>
+<style>
+*{box-sizing:border-box;font-family:Arial,sans-serif}body{margin:0;background:#a00303;min-height:100vh;display:grid;place-items:center}
+.box{width:min(420px,92%);background:#fff;border-radius:15px;padding:25px;box-shadow:0 5px 25px #0003}
+input{width:100%;padding:12px;margin:7px 0;border:1px solid #ddd;border-radius:8px}
+button{width:100%;background:#960505;color:#fff;border:0;padding:12px;border-radius:8px;margin-top:10px;cursor:pointer}
+button:disabled{opacity:.6;cursor:not-allowed}.link{text-align:center;margin-top:14px}.msg{color:#960505;min-height:20px}
+</style></head>
+<body><div class="box"><h1>المحسن ستور</h1><h2 id="title">تسجيل الدخول</h2>
+<input id="email" type="email" placeholder="البريد الإلكتروني" autocomplete="email">
+<input id="password" type="password" placeholder="كلمة المرور" autocomplete="current-password">
+<button id="action" type="button">دخول</button>
+<div class="link"><a href="#" id="toggle">ليس لديك حساب؟ إنشاء حساب</a></div><p id="msg" class="msg" role="alert"></p></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script>
 <script>
+'use strict';
 const db=supabase.createClient(STORE_CONFIG.SUPABASE_URL,STORE_CONFIG.SUPABASE_ANON_KEY);
-async function login(){const {error}=await db.auth.signInWithPassword({email:email.value,password:password.value});if(error)msg.textContent=error.message;else location.href='checkout.html'}
-async function signup(){const name=prompt('الاسم');if(!name)return;const {data,error}=await db.auth.signUp({email:email.value,password:password.value,options:{data:{full_name:name}}});msg.textContent=error?error.message:'تم إنشاء الحساب، يمكنك تسجيل الدخول الآن.'}
+const $=id=>document.getElementById(id); let signupMode=false;
+$('toggle').onclick=e=>{e.preventDefault();signupMode=!signupMode;$('title').textContent=signupMode?'إنشاء حساب':'تسجيل الدخول';$('action').textContent=signupMode?'إنشاء الحساب':'دخول';$('toggle').textContent=signupMode?'لديك حساب؟ تسجيل الدخول':'ليس لديك حساب؟ إنشاء حساب';$('msg').textContent='';};
+$('action').onclick=async()=>{
+ const email=$('email').value.trim(), password=$('password').value;
+ $('msg').textContent='';
+ if(!email||!/^\S+@\S+\.\S+$/.test(email)){ $('msg').textContent='اكتب بريدًا إلكترونيًا صحيحًا.';return;}
+ if(password.length<6){$('msg').textContent='كلمة المرور يجب أن تكون 6 أحرف على الأقل.';return;}
+ $('action').disabled=true;
+ try{
+  if(signupMode){
+   const {data,error}=await db.auth.signUp({email,password});
+   if(error) throw error;
+   if(data.session) location.href='checkout.html';
+   else $('msg').textContent='تم إنشاء الحساب. إذا كان تأكيد البريد مفعّلًا، راجع بريدك ثم سجّل الدخول.';
+  }else{
+   const {error}=await db.auth.signInWithPassword({email,password});
+   if(error) throw error;
+   location.href='checkout.html';
+  }
+ }catch(e){$('msg').textContent=e.message||'حدث خطأ غير متوقع.';}
+ finally{$('action').disabled=false;}
+};
 </script></body></html>
