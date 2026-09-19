@@ -4,40 +4,56 @@
 <title>المحسن ستور - تسجيل الدخول</title>
 <style>
 *{box-sizing:border-box;font-family:Arial,sans-serif}body{margin:0;background:#a00303;min-height:100vh;display:grid;place-items:center}
-.box{width:min(420px,92%);background:#fff;border-radius:15px;padding:25px;box-shadow:0 5px 25px #0003}
-input{width:100%;padding:12px;margin:7px 0;border:1px solid #ddd;border-radius:8px}
+.box{width:min(440px,92%);background:#fff;border-radius:15px;padding:25px;box-shadow:0 5px 25px #0003}
+input,select{width:100%;padding:12px;margin:7px 0;border:1px solid #ddd;border-radius:8px;background:#fff}
 button{width:100%;background:#960505;color:#fff;border:0;padding:12px;border-radius:8px;margin-top:10px;cursor:pointer}
-button:disabled{opacity:.6;cursor:not-allowed}.link{text-align:center;margin-top:14px}.msg{color:#960505;min-height:20px}
+button:disabled{opacity:.6;cursor:not-allowed}.link{text-align:center;margin-top:14px}.msg{color:#960505;min-height:20px;line-height:1.7}.small{font-size:13px;color:#666;margin-top:6px;line-height:1.7}.seller{display:none}.seller.show{display:block}
 </style></head>
 <body><div class="box"><h1>المحسن ستور</h1><h2 id="title">تسجيل الدخول</h2>
+<div id="signupFields" class="seller">
+<label>نوع الحساب<select id="accountType"><option value="customer">مشتري</option><option value="seller">بائع</option></select></label>
+<label id="nameWrap" class="seller">اسمك بالكامل<input id="fullName" type="text" placeholder="الاسم بالكامل" autocomplete="name"></label>
+<label id="storeWrap" class="seller">اسم المتجر أو النشاط<input id="storeName" type="text" placeholder="اسم المتجر"></label>
+<label id="addressWrap" class="seller">العنوان / مكان النشاط<input id="address" type="text" placeholder="العنوان"></label>
+</div>
 <input id="email" type="email" placeholder="البريد الإلكتروني" autocomplete="email">
+<input id="phone" type="tel" placeholder="رقم الهاتف" autocomplete="tel" style="display:none">
 <input id="password" type="password" placeholder="كلمة المرور" autocomplete="current-password">
 <button id="action" type="button">دخول</button>
-<div class="link"><a href="#" id="toggle">ليس لديك حساب؟ إنشاء حساب</a></div><p id="msg" class="msg" role="alert"></p></div>
+<div class="link"><a href="#" id="toggle">ليس لديك حساب؟ إنشاء حساب</a></div><p id="msg" class="msg" role="alert"></p>
+<p class="small">بيانات البائع الأساسية (الاسم والبريد والهاتف وبيانات النشاط) تصل إلى المدير للمراجعة. كلمة المرور لا يتم حفظها أو إرسالها للمدير.</p></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script>
 <script>
 'use strict';
 const db=supabase.createClient(STORE_CONFIG.SUPABASE_URL,STORE_CONFIG.SUPABASE_ANON_KEY);
 const $=id=>document.getElementById(id); let signupMode=false;
-$('toggle').onclick=e=>{e.preventDefault();signupMode=!signupMode;$('title').textContent=signupMode?'إنشاء حساب':'تسجيل الدخول';$('action').textContent=signupMode?'إنشاء الحساب':'دخول';$('toggle').textContent=signupMode?'لديك حساب؟ تسجيل الدخول':'ليس لديك حساب؟ إنشاء حساب';$('msg').textContent='';};
+function refreshType(){
+ const seller=$('accountType').value==='seller';
+ ['nameWrap','storeWrap','addressWrap'].forEach(id=>$(id).classList.toggle('show',seller));
+}
+$('accountType').onchange=refreshType;
+$('toggle').onclick=e=>{e.preventDefault();signupMode=!signupMode;$('title').textContent=signupMode?'إنشاء حساب':'تسجيل الدخول';$('action').textContent=signupMode?'إنشاء الحساب':'دخول';$('toggle').textContent=signupMode?'لديك حساب؟ تسجيل الدخول':'ليس لديك حساب؟ إنشاء حساب';$('signupFields').classList.toggle('show',signupMode);$('phone').style.display=signupMode?'block':'none';$('msg').textContent='';if(signupMode)refreshType();};
 $('action').onclick=async()=>{
- const email=$('email').value.trim(), password=$('password').value;
- $('msg').textContent='';
- if(!email||!/^\S+@\S+\.\S+$/.test(email)){ $('msg').textContent='اكتب بريدًا إلكترونيًا صحيحًا.';return;}
+ const email=$('email').value.trim(), password=$('password').value, phone=$('phone').value.trim(); $('msg').textContent='';
+ if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ $('msg').textContent='اكتب بريدًا إلكترونيًا صحيحًا.';return;}
+ if(signupMode && !phone){$('msg').textContent='اكتب رقم الهاتف.';return;}
+ if(signupMode && !/^[0-9+\s()-]{7,20}$/.test(phone)){ $('msg').textContent='اكتب رقم هاتف صحيح.';return;}
  if(password.length<6){$('msg').textContent='كلمة المرور يجب أن تكون 6 أحرف على الأقل.';return;}
+ if(signupMode && $('accountType').value==='seller'){
+   if(!$('fullName').value.trim()||!$('storeName').value.trim()||!$('address').value.trim()){$('msg').textContent='اكتب الاسم واسم المتجر والعنوان للبائع.';return;}
+ }
  $('action').disabled=true;
  try{
   if(signupMode){
-   const {data,error}=await db.auth.signUp({email,password});
+   const type=$('accountType').value;
+   const {data,error}=await db.auth.signUp({email,password,options:{data:{phone,account_type:type,full_name:$('fullName').value.trim(),store_name:$('storeName').value.trim(),address:$('address').value.trim()}}});
    if(error) throw error;
-   if(data.session) location.href='checkout.html';
-   else $('msg').textContent='تم إنشاء الحساب. إذا كان تأكيد البريد مفعّلًا، راجع بريدك ثم سجّل الدخول.';
+   if(data.session) location.href='index.html';
+   else $('msg').textContent=type==='seller'?'تم إنشاء طلب البائع. بعد تأكيد البريد، سيظهر طلبك للمدير للمراجعة.':'تم إنشاء الحساب. إذا ظهر طلب تأكيد البريد، أكّد بريدك ثم سجّل الدخول.';
   }else{
-   const {error}=await db.auth.signInWithPassword({email,password});
-   if(error) throw error;
-   location.href='checkout.html';
+   const {error}=await db.auth.signInWithPassword({email,password}); if(error) throw error; location.href='index.html';
   }
- }catch(e){$('msg').textContent=e.message||'حدث خطأ غير متوقع.';}
+ }catch(e){$('msg').textContent=e.message||'حدث خطأ غير متوقع. تأكد من إعداد Supabase ومفتاحه.';}
  finally{$('action').disabled=false;}
 };
 </script></body></html>

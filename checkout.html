@@ -31,10 +31,16 @@ button{background:#960505;color:#fff;border:0;padding:11px 18px;border-radius:8p
 const db=supabase.createClient(STORE_CONFIG.SUPABASE_URL,STORE_CONFIG.SUPABASE_ANON_KEY);
 const $=id=>document.getElementById(id);
 let cart=[], user=null;
-function loadCart(){try{const x=JSON.parse(localStorage.getItem('alMohsenStoreCart')||'[]');return Array.isArray(x)?x.filter(i=>i&&Number(i.qty)>0):[]}catch{return[]}}
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function loadLocalCart(){try{const raw=localStorage.getItem('alMohsenStoreCart') || localStorage.getItem('al_mohsen_cart') || '[]'; const x=JSON.parse(raw);return Array.isArray(x)?x.filter(i=>i&&Number(i.qty)>0):[]}catch{return[]}}
+async function loadCart(){
+  const r=await db.from('cart_items').select('id,product_id,quantity,products(id,name,price,emoji)').eq('user_id',user.id).order('created_at');
+  if(!r.error && (r.data||[]).length){return r.data.map(x=>({rowId:x.id,id:x.product_id,name:x.products?.name||'منتج',price:Number(x.products?.price||0),qty:Number(x.quantity||1),emoji:x.products?.emoji||'📦'})).filter(i=>i.qty>0)}
+  return loadLocalCart();
+}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function validCart(){
- return cart.every(x=>x.id!==undefined&&x.name&&Number.isFinite(Number(x.price))&&Number(x.price)>=0&&Number.isInteger(Number(x.qty))&&Number(x.qty)>0);
+ return cart.every(x=>x.id!==undefined&&x.id!==null&&String(x.id).trim()&&x.name&&Number.isFinite(Number(x.price))&&Number(x.price)>=0&&Number.isInteger(Number(x.qty))&&Number(x.qty)>0);
 }
 function render(){
  $('items').innerHTML=cart.length?cart.map(x=>`<div class="item">${esc(x.name)} × ${x.qty} — ${(Number(x.price)*x.qty).toLocaleString('ar-EG')} ج.م</div>`).join(''):'السلة فارغة';
@@ -69,11 +75,12 @@ async function placeOrder(){
    customer_name:name,customer_phone:phone,shipping_address:shippingAddress
   }).select().single();
   if(error) throw error;
-  const rows=cart.map(x=>({order_id:order.id,product_name:String(x.name),product_id:x.id,unit_price:Number(x.price),quantity:Number(x.qty)}));
+  const rows=cart.map(x=>({order_id:order.id,product_name:String(x.name),product_id:/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(x.id))?String(x.id):null,unit_price:Number(x.price),quantity:Number(x.qty)}));
   const r=await db.from('order_items').insert(rows);
   if(r.error){await db.from('orders').delete().eq('id',order.id);throw r.error;}
   const s=await db.from('shipments').insert({order_id:order.id,status:'pending',shipping_cost:ship});
   if(s.error){/* لا نفشل الطلب إذا كان جدول الشحن غير متاح، لأن الطلب نفسه تم حفظه */ console.warn(s.error);}
+  const clearDb=await db.from('cart_items').delete().eq('user_id',user.id);
   localStorage.removeItem('alMohsenStoreCart'); cart=[]; render();
   msg.className='msg ok'; msg.textContent='تم إنشاء الطلب بنجاح. الدفع عند الاستلام.';
  }catch(e){msg.className='msg error';msg.textContent=e.message||'تعذر إنشاء الطلب.';$('orderBtn').disabled=false;}

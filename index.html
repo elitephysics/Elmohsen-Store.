@@ -133,28 +133,28 @@ html{scroll-behavior:smooth;}
 <span>📱</span>
 <h3>هاتف ذكي</h3>
 <p>2999 ج.م</p>
-<button class="add-to-cart" data-name="هاتف ذكي" data-price="2999">إضافة للسلة</button>
+<button class="add-to-cart" data-id="phone-001" data-name="هاتف ذكي" data-price="2999">إضافة للسلة</button>
 </div>
 
 <div class="card">
 <span>💻</span>
 <h3>لابتوب</h3>
 <p>14999 ج.م</p>
-<button class="add-to-cart" data-name="لابتوب" data-price="14999">إضافة للسلة</button>
+<button class="add-to-cart" data-id="laptop-001" data-name="لابتوب" data-price="14999">إضافة للسلة</button>
 </div>
 
 <div class="card">
 <span>🎧</span>
 <h3>سماعات</h3>
 <p>799 ج.م</p>
-<button class="add-to-cart" data-name="سماعات" data-price="799">إضافة للسلة</button>
+<button class="add-to-cart" data-id="headphones-001" data-name="سماعات" data-price="799">إضافة للسلة</button>
 </div>
 
 <div class="card">
 <span>🛒</span>
 <h3>مواد غذائية</h3>
 <p>199 ج.م</p>
-<button class="add-to-cart" data-name="مواد غذائية" data-price="199">إضافة للسلة</button>
+<button class="add-to-cart" data-id="grocery-001" data-name="مواد غذائية" data-price="199">إضافة للسلة</button>
 </div>
 
 </div>
@@ -180,100 +180,67 @@ html{scroll-behavior:smooth;}
 </footer>
 
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
 <script>
-(function () {
-  "use strict";
-
-  const CART_KEY = "al_mohsen_cart";
-  const buttons = document.querySelectorAll(".add-to-cart");
-  const cartContent = document.getElementById("cart-content");
-
-  function getCart() {
-    try {
-      const cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]");
-      return Array.isArray(cart) ? cart : [];
-    } catch (e) {
-      return [];
-    }
+(function(){
+  'use strict';
+  const CART_KEY='alMohsenStoreCart';
+  const db=supabase.createClient(STORE_CONFIG.SUPABASE_URL,STORE_CONFIG.SUPABASE_ANON_KEY);
+  const grid=document.querySelector('#products .grid');
+  const cartContent=document.getElementById('cart-content');
+  let currentUser=null;
+  const fallbackProducts=[
+    {id:'phone-001',name:'هاتف ذكي',price:2999,emoji:'📱'},
+    {id:'laptop-001',name:'لابتوب',price:14999,emoji:'💻'},
+    {id:'headphones-001',name:'سماعات',price:799,emoji:'🎧'},
+    {id:'grocery-001',name:'مواد غذائية',price:199,emoji:'🛒'}
+  ];
+  const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  function localGet(){try{let x=JSON.parse(localStorage.getItem(CART_KEY)||'[]');return Array.isArray(x)?x:[]}catch{return[]}}
+  function localSave(x){localStorage.setItem(CART_KEY,JSON.stringify(x));renderCart(x)}
+  async function getUser(){try{const r=await db.auth.getUser();return r.data?.user||null}catch{return null}}
+  async function getDbCart(){
+    if(!currentUser) return null;
+    const r=await db.from('cart_items').select('id,product_id,quantity,products(id,name,price,emoji)').eq('user_id',currentUser.id).order('created_at');
+    if(r.error) return null;
+    return (r.data||[]).map(x=>({rowId:x.id,id:x.product_id,name:x.products?.name||'منتج',price:Number(x.products?.price||0),qty:Number(x.quantity||1),emoji:x.products?.emoji||'📦'}));
   }
-
-  function saveCart(cart) {
-    localStorage.setItem(CART_KEY, JSON.stringify(cart));
-    renderCart();
+  async function getCart(){const c=await getDbCart();return c===null?localGet():c}
+  async function addDb(product){
+    if(!currentUser||!uuid.test(String(product.id))) return false;
+    const old=await db.from('cart_items').select('id,quantity').eq('user_id',currentUser.id).eq('product_id',product.id).maybeSingle();
+    if(old.error) return false;
+    if(old.data){const r=await db.from('cart_items').update({quantity:Number(old.data.quantity||0)+1}).eq('id',old.data.id).eq('user_id',currentUser.id);return !r.error}
+    const r=await db.from('cart_items').insert({user_id:currentUser.id,product_id:product.id,quantity:1});
+    return !r.error;
   }
-
-  function renderCart() {
-    if (!cartContent) return;
-    const cart = getCart();
-
-    if (!cart.length) {
-      cartContent.innerHTML = "<p>السلة فارغة حاليًا.</p>";
-      return;
-    }
-
-    let total = 0;
-    const items = cart.map((item, index) => {
-      const price = Number(item.price) || 0;
-      const qty = Number(item.qty) || 1;
-      total += price * qty;
-      return `
-        <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #ddd;">
-          <strong>${escapeHtml(item.name)}</strong>
-          <p>${price.toLocaleString("ar-EG")} ج.م × ${qty}</p>
-          <button type="button" data-remove="${index}">حذف</button>
-        </div>`;
-    }).join("");
-
-    cartContent.innerHTML = `
-      ${items}
-      <p><strong>الإجمالي: ${total.toLocaleString("ar-EG")} ج.م</strong></p>
-      <button type="button" id="checkout-btn">إتمام الطلب</button>
-      <button type="button" id="clear-cart">تفريغ السلة</button>
-    `;
-
-    cartContent.querySelectorAll("[data-remove]").forEach(btn => {
-      btn.addEventListener("click", function () {
-        const updated = getCart();
-        updated.splice(Number(this.dataset.remove), 1);
-        saveCart(updated);
-      });
-    });
-
-    const clear = document.getElementById("clear-cart");
-    if (clear) clear.addEventListener("click", () => saveCart([]));
-
-    const checkout = document.getElementById("checkout-btn");
-    if (checkout) {
-      checkout.addEventListener("click", () => {
-        window.location.href = "checkout.html";
-      });
-    }
+  async function removeDb(item){if(!currentUser||!item.rowId)return false;const r=await db.from('cart_items').delete().eq('id',item.rowId).eq('user_id',currentUser.id);return !r.error}
+  async function clearDb(){if(!currentUser)return false;const r=await db.from('cart_items').delete().eq('user_id',currentUser.id);return !r.error}
+  function productCard(p){return `<div class="card"><span>${esc(p.emoji||'📦')}</span><h3>${esc(p.name)}</h3><p>${Number(p.price||0).toLocaleString('ar-EG')} ج.م</p><button class="add-to-cart" data-id="${esc(p.id)}" data-name="${esc(p.name)}" data-price="${Number(p.price||0)}">إضافة للسلة</button></div>`}
+  async function loadProducts(){
+    if(!grid)return;
+    try{
+      const r=await db.from('products').select('id,name,price,emoji,active').eq('active',true).order('created_at',{ascending:false});
+      if(!r.error && r.data && r.data.length) grid.innerHTML=r.data.map(productCard).join('');
+      bindButtons();
+    }catch{bindButtons()}
   }
-
-  function escapeHtml(value) {
-    return String(value).replace(/[&<>"']/g, ch => ({
-      "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;"
-    }[ch]));
+  async function renderCart(provided){
+    if(!cartContent)return;
+    const cart=provided||await getCart();
+    if(!cart.length){cartContent.innerHTML='<p>السلة فارغة حاليًا.</p>';return}
+    let total=0;
+    const items=cart.map((item,i)=>{const price=Number(item.price)||0,qty=Number(item.qty)||1;total+=price*qty;return `<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #ddd;"><strong>${esc(item.emoji||'📦')} ${esc(item.name)}</strong><p>${price.toLocaleString('ar-EG')} ج.م × ${qty}</p><button type="button" data-remove="${i}">حذف</button></div>`}).join('');
+    cartContent.innerHTML=`${items}<p><strong>الإجمالي: ${total.toLocaleString('ar-EG')} ج.م</strong></p><button type="button" id="checkout-btn">إتمام الطلب</button><button type="button" id="clear-cart">تفريغ السلة</button>`;
+    cartContent.querySelectorAll('[data-remove]').forEach(b=>b.onclick=async()=>{const c=await getCart(),item=c[Number(b.dataset.remove)];if(currentUser&&item?.rowId) await removeDb(item);else{c.splice(Number(b.dataset.remove),1);localSave(c);return}renderCart()});
+    document.getElementById('clear-cart')?.addEventListener('click',async()=>{if(currentUser)await clearDb();else localSave([]);renderCart()});
+    document.getElementById('checkout-btn')?.addEventListener('click',async()=>{const c=await getCart();if(!c.length){alert('السلة فارغة.');return}location.href='checkout.html'});
   }
-
-  buttons.forEach(button => {
-    button.addEventListener("click", function () {
-      const name = this.dataset.name;
-      const price = Number(this.dataset.price);
-      if (!name || !Number.isFinite(price) || price < 0) return;
-
-      const cart = getCart();
-      const existing = cart.find(item => item.name === name && item.price === price);
-
-      if (existing) existing.qty = (Number(existing.qty) || 0) + 1;
-      else cart.push({ name, price, qty: 1 });
-
-      saveCart(cart);
-      document.getElementById("cart").scrollIntoView({ behavior: "smooth" });
-    });
-  });
-
-  renderCart();
+  function bindButtons(){document.querySelectorAll('.add-to-cart').forEach(btn=>{btn.onclick=async function(){const p={id:this.dataset.id,name:this.dataset.name,price:Number(this.dataset.price),emoji:this.previousElementSibling?.textContent||'📦'};if(!p.name||!Number.isFinite(p.price)||p.price<0)return;let ok=false;if(currentUser)ok=await addDb(p);if(!ok){const c=localGet(),old=c.find(x=>x.id===p.id);if(old)old.qty=(Number(old.qty)||0)+1;else c.push({...p,qty:1});localSave(c);return}renderCart();document.getElementById('cart').scrollIntoView({behavior:'smooth'});}})}
+  async function init(){currentUser=await getUser();await loadProducts();await renderCart();}
+  init();
 })();
 </script>
 
